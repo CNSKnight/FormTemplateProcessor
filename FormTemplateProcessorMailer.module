@@ -1,0 +1,421 @@
+<?php
+
+/**
+* Module to let you use templates as web contact forms.
+*
+* Can send you email and/or save the submission to a page in your site. 
+*
+* Usage:
+*
+* 1. In admin, create the fields you want to be part of the form.
+* 2. Create a new template and assign your fields to this template.
+* 3. Create another template for your contact form page (if you don't already have one).
+* 4. Use the example below as a starting point for this contact form page: 
+*
+* $tfp = $modules->get('TemplateFormProcessor'); 
+* $tfp->set('template', $templates->get('my_contact_form_template')); // required
+* $tfp->set('requiredFields', array('fullname', 'email'));
+* $tfp->set('toName', 'Webmaster'); // optional
+* $tfp->set('toAddress', 'your@email.com'); // optional, sends form as email
+* $tfp->set('parent', $page); // optional, saves form as page
+* Now, either:
+* $form = $tfp->render(true);
+* $inputFields = $form->get('children');
+* or:
+* echo $form->render(); // draw form or process submitted form
+*
+* 5. Use CSS to style the fields. See the bottom of this file for suggestions.
+*
+*/
+class FormTemplateProcessorMailer extends WireData implements Module {
+    /**
+    * Return an array of module information
+    *
+    * @return array
+    *
+    */
+    public static function getModuleInfo() {
+    	return array(
+    		'title' => 'Form Template Processor and Mailer', 
+    		'version' => 100, 
+    		'summary' => 'Template fields define web contact forms. Can send forms as emails with or without PHPMailer.  Can save forms as pages. Allows custom rendering. Features working demo HTML5 form. Use on static page and/or on any page via overlay.',
+    		'singular' => false,
+    		'autoload' => false,
+    		);
+    }
+
+	/**
+	* Instance of InputfieldForm that we use to hold our form fields.
+	*
+	*/
+	protected $form;
+	
+	/**
+	* Instance of Page, that we use to hold our submitted contact info. 
+	*
+	*/
+	protected $contact;
+	
+	/**
+	* Initialize a new web contact form
+	*
+	* @param Template $template Template object holding the form's fields.
+	*
+	*/
+	public function init() {
+	    //  
+		$this->formAction = './';
+
+		// create a page for holding our form fields
+		$this->contact = new Page();
+		
+		// Template to use for the contact form fields (required).
+		// must be a Template object, it will be assigned to $this->contact.
+		$this->set('template', null);
+		
+	 	// Optional name to whom this form will be submitted
+		$this->set('toName', '');
+		
+	 	// Optional E-Mail address to whom this form will be submitted
+		$this->set('toAddress', '');
+		
+		// Array of field names that are required to complete the submission
+		// if not specified, it will use the admin field settings.
+		// I recommend that you make at least one field required, since this 
+		// isn't an admin setting yet.
+		$this->set('requiredFields', array());
+		
+	 	// Array of field names that should be skipped when drawing the form
+		$this->set('skipFields', array('title'));
+		
+		// Subject of the email that gets sent 
+		// eg: 'Web Contact Form Submission'
+		$this->set('emailSubject', ''); 
+		
+		// Optional parent page for the contact.
+		// If ommited, the page will not be saved to the DB.
+		$this->set('parent', null);
+		
+		
+		// message output upon successful completion of the form
+		$this->set('successMessage', '<h2>Thank you, your submission has been sent.</h2>'); 
+		
+		// date format used for the title's of newly created contact pages
+		$this->set('dateFormat', 'F j, Y, g:i a');
+
+		//
+		$this->set('submitText', 'Send');
+		
+		// use mail() or PHPMailer:: <- recommended
+		$this->set('usePHPMailer', true);
+		
+		// use mail() or configurable SMTP server
+		$this->set('isSMTP', false);
+		
+		$this->set('fromNameName', 'sender_name');
+		$this->set('fromAddressName', 'email');
+		
+		// set per-form (hidden field?) or use ::$emailSubject
+		$this->set('subjectName', 'subject'); 
+		
+		$this->set('bodyIsHTML', true);
+		
+		// see ___configureSMTP()
+		$this->set('mailerSMTPConfig', array());
+
+		$this->set('mailerError', null);
+		$this->set('mailerFail', null);
+		$this->set('mailerSuccess', null);
+
+		$this->set('pageSaved', '<h3>Your info was saved.</h3>');
+	}
+	
+	/**
+	* Intercept when some properties are set so that we can use them
+	*
+	*/
+	public function set($key, $value) {
+		if ($key == 'parent' && $value) {
+			if (!$value instanceof Page) throw new WireException('Parent must be a Page object');
+			$this->contact->parent = $value;
+			
+		} else if ($key == 'template' && $value) {
+			if (!$value instanceof Template) throw new WireException('Template must be a Template object');
+			$this->contact->template = $value;
+		}
+		return parent::set($key, $value);
+	}
+	
+	/**
+	* Build the web contact form and add fields to it
+	*
+	*/
+	protected function ___buildForm() {
+
+		// create the contact form
+		$form = $this->modules->get("InputfieldForm");
+		$form->method = 'post';
+		$form->action = $this->formAction;
+		$form->mailerMsg = ''; // any messages to be attached
+		
+		// get the collection of inputs that can populate this page's fields
+		$inputfields = $this->contact->getInputfields();
+		
+		// make all the fields required and add them to the form
+		foreach($inputfields as $inputfield) {
+			if (in_array($inputfield->name, $this->skipFields)) continue; 
+			if (in_array($inputfield->name, $this->requiredFields)) $inputfield->required = true; 
+			$form->add($inputfield);
+		}
+		
+		// the inputfields don't already have a submit button, so we'll add one.
+		$submit = $this->modules->get("InputfieldSubmit");
+		
+		// set a random name to the submit button so that this form doesn't process 
+		// any submissions without first receiving a rendered form. This isn't 
+		// necessary, but it may help to reduce automated spam to the form.
+		$submit->name = "submit";
+		$submit->value = $this->submitText;
+		
+		// add the submit button the the form
+		$form->add($submit);
+		
+		return $form;
+	}
+	
+	/**
+	* Send an email with the results of the processed form
+	*
+	*/
+	protected function ___sendEmail($form) {
+
+		$inputsAry = '';
+		$fromName = '';
+		$fromAddress = '';
+		$subject = '';
+		
+		foreach($this->contact->fields as $field) {
+
+			if (in_array($field->name, $this->skipFields)) continue; 
+			
+			$label = $field->label;
+			$value = htmlentities($this->contact->get($field->name));
+			
+			$inputsAry[$label] = $value;
+			
+			if ($field->name == $this->fromNameName)
+				$fromName = $value;
+			elseif ($field->name == $this->fromAddressName && $field->type instanceof FieldtypeEmail)
+				$fromAddress = $value;
+			elseif ($field->name == $this->subjectName) 
+				$subject = $value;
+		}
+		
+		$mailInfo = (object) array(
+			'toName' => $this->toName,
+			'toAddress' => $this->toAddress,
+			'fromName' => $fromName,
+			'fromAddress' => $fromAddress,
+			'subject' => $subject ? $subject : $this->emailSubject,
+			'inputsAry' => $inputsAry,
+			'textBody' => $this->buildBody($inputsAry),
+			'htmlBody' => $this->bodyIsHTML ? $this->buildBody($inputsAry, true) : null,
+			);
+		
+		if ($this->usePHPMailer)  $this->PHPMail($mailInfo);
+		else $this->mail($mailInfo);
+	}
+	
+	protected function ___buildBody($inputsAry, $withHTML=false) {
+		$body = '';
+
+		if (! $withHTML) {
+			foreach ($inputsAry as $label => $value) {
+				$body .= str_pad ($label, 24, ' ', STR_PAD_LEFT).': '.$value.PHP_EOL;
+			}
+
+			return $body;
+		}
+
+
+		foreach ($inputsAry as $label => $value) {
+			$body .= "<h2>$label</h2><p>$value</p>";
+		}
+
+		return "<html><head></head><body>$body</body></html>";
+	}
+	
+	protected function ___mail($mailInfo) {
+		
+		$headers = $mailInfo->fromAddress ? 'From: '.$mailInfo->fromName.'<'.$mailInfo->fromAddress.'>'.PHPEOL : '';
+		$headers .= sprintf('Content-Type: %s;', $this->bodyIsHTML ? 'text/html' : 'text/plain');
+
+	    // send the email
+		mail($mailInfo->toAddress, $mailInfo->subject, $this->bodyIsHTML ? $mailInfo->htmlBody : $mailInfo->textBody, $headers); 
+	}
+	
+	protected function ___PHPMail($mailInfo) {
+		$mailer = $this->modules->get('EmailPHPMailer'); 
+
+		$mailer->CharSet = 'UTF-8';
+		$mailer->ContentType = $this->bodyIsHTML ? 'text/html' : 'text/plain';
+
+		if ($this->isSMTP) {
+			$mailer->IsSMTP();
+			$this->configureSMTP($mailer);
+		} else {
+			$mailer->IsMail();
+		}
+
+		$mailer->FromName = $mailInfo->fromName;
+		$mailer->From = $mailInfo->fromAddress;
+
+		$mailer->AddAddress($mailInfo->toAddress, $mailInfo->toName);
+
+		$mailer->Subject = $mailInfo->subject;
+
+		if ($this->bodyIsHTML) {
+			$mailer->Body = $mailInfo->htmlBody;
+			$mailer->isHTML(true);
+			$mailer->AltBody = $mailInfo->textBody;
+		} else {
+			$mailer->Body = $mailInfo->textBody;
+		}
+
+		if (! $mailer->Send()) {
+			if ($mailer->IsError()) {
+				$this->set('mailerError', "ERROR :: The mailer replied: {$mailer->ErrorInfo}");
+			} else {
+				$this->set('mailerFail', "ERROR :: Sorry, we could not mail to {$mailInfo->toName} at this time.");
+			}
+		} else {
+			$this->set('mailerSuccess', "We have emailed to {$mailInfo->toName} from {$mailInfo->fromName}");
+		}
+
+        # While reusable, we don't need to here
+        #$mailer->Body = '...truncated...';
+        #$mailer->ClearAddresses();
+        #$mailer->ClearAttachments();
+
+		unset($mailer);
+	}
+	
+	/**
+	* More advanced options when using an off-host SMTP service
+	* ___PHPMail() will call this so you could set any of these for a global config.
+	* Additionally, ::mailerSMTPConfig can be used for per-run configs.
+	* @see the full API http://phpmailer.worxware.com/index.php?pg=methods
+	*/
+	protected function ___configureSMTP($mailer) {
+        //$mailer->SMTPDebug=false;
+        //$mailer->Host = '';
+        //$mailer->Port = '';
+        //$mailer->Username = null; 
+        //$mailer->AddAddress('toAddress', 'toName');
+        //$mailer->AddReplyTo('address', 'name');
+        //$mailer->AddBCC('address', 'name');
+        //$mailer->ConfirmReadingTo = 'address';
+        //$mailer->Encoding = 'encoding';
+        //$mailer->AddAttachment(path/to/file.ext, common-file-name, encoding, header_(MIME)_type);
+		$config = $this->mailerSMTPConfig;
+		if (empty($config)) return;
+
+		foreach($config as $var => $val) {
+			$mailer->$var = $val;
+		}
+
+	}
+	
+	/**
+	* Create a new page with the results of the processed form
+	*
+	*/
+	protected function ___savePage($form) {
+
+		if (!$this->contact->parent) return; 
+		
+		$this->contact->name = date('y-m-d-H-i-s-u');
+		
+		if (in_array('title', $this->skipFields)) {
+			$this->contact->title = date($this->dateFormat);
+		}
+		
+		if (ProcessWire::versionMajor == 2 && ProcessWire::versionMinor == 0) {
+			$this->contact->status = Page::statusHidden;
+			$this->contact->removeRole('guest');
+		} else {
+			// PW 2.1 and above
+			$this->contact->status = Page::statusUnpublished; 
+		}
+		
+		$this->contact->save();
+	}
+	
+	
+	/**
+	* Render a form or process it's input
+	*
+	* @return string Output of the form or success message upon completion.
+	*
+	*/
+	public function ___render($customRender=false) {
+		if (!$this->contact->template) throw new WireException("You must specify a Template");
+		
+		$form = $this->buildForm();
+		
+		// if the form hasn't been submitted, then just return the rendered form.
+		// @note Don't rely on $this->input->post->submit which may not exist on an async submit
+		if (! $this->input->post()->count()) {
+			if ($customRender) {
+				return $form;
+			} else {
+				return $form->render();
+			}
+		}
+		
+		// the whole of POSTed data can be got like this if needed
+		# $posts = $this->input->post()->getArray(); # all posted vars
+
+		// variable to hold string output
+		$msg = ''; 
+		
+		// now we assume the form has been submitted.
+		// tell the form to process input frmo the post vars.
+		$form->processInput($this->input->post);
+		
+		// see if any errors occurred
+		if (count($form->getErrors())) {
+			// re-render the form, it will include the error messages
+			if ($customRender) {
+				$msg .= '<h3>Sorry, we found a problem with your form entries...</h3>';
+				$form->mailerMsg = $msg;
+				return $form;
+			} else {
+				return $form->render();
+			}
+			
+		} else {
+			// successful form submission, mails and/or saves per our config.
+			foreach($form as $field) {
+				$this->contact->set($field->name, $field->value); 
+			}
+			
+			if ($this->toAddress) {
+				$this->sendEmail($form);
+				if ($this->mailerFail || $this->mailerError) {
+					$msg .= $this->mailerFail.$this->mailerError;
+				} else {
+					$msg .= ($msg ? '<br>' : '').$this->successMessage;
+				}
+			}
+
+			if ($this->parent) {
+				$this->savePage($form);
+				$msg .= $this->pageSaved;
+			}
+			
+			$form->mailerMsg = $msg;
+			return $form;
+		}
+	}
+}

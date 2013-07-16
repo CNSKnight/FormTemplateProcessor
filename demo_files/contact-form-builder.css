@@ -1,0 +1,40 @@
+/**
+* Ryans suggested styles to get started styling the fields created by this module via the pw form builder
+* @note not used in the demo
+*/
+
+.Inputfields,
+.Inputfields li {
+list-style: none;
+margin: 1em 0;
+padding: 0;
+}
+
+.Inputfields li label {
+font-weight: bold;
+}
+
+.Inputfields li p {
+margin: 0;
+}
+
+.Inputfields li p.description {
+font-style: italic;
+}
+
+.Inputfields textarea,
+.Inputfields .InputfieldMaxWidth {
+width: 100%;
+}
+
+.Inputfields .InputfieldSubmit label {
+display: none;
+}
+
+.ui-state-error-text {
+color: red;
+}
+
+
+
+
