@@ -8,7 +8,7 @@ Can send email and/or save the submission to a page in your site.
 Mail option via native mail() or with PHPMailer via mail() or SMTP.
 Includes POC HTML5 contact form in a static page and via async modal/overlay. 
 
-For more information:
+For more information on Ryans original POC:
 http://processwire.com/talk/index.php/topic,75.0.html
 
 Designed and tested on pw 2.3.0
@@ -42,3 +42,6 @@ Usage:
 3. Create another template for the static contact form page.
 4. And a page for this contact template. The demo uses a page called /contact/
 
+Demo:
+=====
+http://cookbook.dharmiweb.net/ (click on contact)
