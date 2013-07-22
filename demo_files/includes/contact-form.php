@@ -1,9 +1,15 @@
 <?
 /**
-* This is the templette used by contact.php for custom rendering the form markup
-* Also controls async output on ajax'd form requests
-* Requires an FormTemplateProcessorMailer object
-* @note Copy this into your own templates tree before cloning or customizing
+* This is the templette used by contact.php in the demo.
+* It is used for custom rendering the form markup, and
+* also controls async output on ajax'd form requests.
+* Requires an FormTemplateProcessorMailer object, in
+* this case created in contact.php.
+* @note Copy this into your own templates tree before
+* cloning or customizing.
+* - As this is not a template that yields a complete page, 
+* the author places it and others in templates/includes/
+* @see demo_files/contact.php
 *
 * @author Codename: Steeve Knight | cookbook.DharmiWeb.net
 * @see contact.php
@@ -49,7 +55,7 @@ $fields = $form->get('children');
         <fieldset class="detailsBloc">	
 
             <?foreach($fields as $field) {
-                if (! $field instanceof InputfieldTextarea && ! $field instanceof InputfieldSubmit) {
+                if (! $field instanceof InputfieldTextarea && ! $field instanceof InputfieldSubmit && $field->name != 'subject') {
                     if(! $field instanceof InputfieldWrapper) {
                         $errors = $field->getErrors(true);
                         foreach($errors as $error) {
@@ -74,8 +80,8 @@ $fields = $form->get('children');
                         <?if ($field instanceof InputfieldSubmit) {?>
                         <div class="controls"><button  id="<?=$field->id;?>" class="<?=$field->class;?>" type="<?=$field->type;?>" name="<?=$field->name;?>" value="<?=$field->value;?>" ><span class="icon">M</span> <?=$field->label;?></button></div>
                         <?}?>
-                    </fieldset>
                     <?}?>
+                    </fieldset>
 
                     <div class="closer"><span class="icon">Â</span></div>
                     <input type="hidden" name="subject" value="Contact via <?=$config->httpHost;?>">

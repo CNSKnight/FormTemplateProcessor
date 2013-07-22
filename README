@@ -18,29 +18,35 @@ Installation:
 =============
 
 1. In your site/modules/ directory:
-   a. Install* EmailPHPMailer and git clone PHPMailer into the same directory.
-   b. Install* FormTemplateProcessorMailer.module
-
+   a. Install* FormTemplateProcessorMailer.module
+   b. If using PHPMailer, navigate to the modules/FormTemplateProcessorMailer directory in a terminal and issue: 
+      $ git clone https://github.com/PHPMailer/PHPMailer.git PHPMailer
+      (assumes you have git installed)
 
 * 1. Login into ProcessWire admin > Modules. 
   2. Click "Check for new modules".
   3. Click "install" next to the new <module-name>.
 
 2. For the demo, copy all of the files in demo_files/ to appropriate locations
-3. Follow the notes at the bottom of contact.php
+3. Follow the Usage notes here.
 
 Usage:
 ======
 
 1. In admin, create the fields you want to be part of the form.
 	Our /contact/ demo requires:
+	  -subject (the demo uses a hidden input but you can also set during runtime module config)
 	  -sender_name [required]
 	  -email [required] (a built-in field under admin > setup > fields > filters)
-	  -phone
 	  -message [required]
-2. Create a new template and assign these fields.
-3. Create another template for the static contact form page.
-4. And a page for this contact template. The demo uses a page called /contact/
+	  -phone
+	Additionally, all of these fields are tagged with contactForm - See demo_files/screenshots/.
+2. Create a new template and assign these fields. Note that a physical template file is not needed here.
+3. If you will be using a static contact page, choose or create a separate template that will hold the form widget.
+4. And then add a page for this template. The demo uses a page called /contact/.  See demo_fields/contact.php
+    for example usage of the contact page.
+5. Adjust the settings eg toName and toAddress in contact-form.php and contact.php, and follow the notes
+    at the bottom of contact.php
 
 Demo:
 =====

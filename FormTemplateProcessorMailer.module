@@ -96,7 +96,6 @@ class FormTemplateProcessorMailer extends WireData implements Module {
 		// If ommited, the page will not be saved to the DB.
 		$this->set('parent', null);
 		
-		
 		// message output upon successful completion of the form
 		$this->set('successMessage', '<h2>Thank you, your submission has been sent.</h2>'); 
 		
@@ -105,9 +104,12 @@ class FormTemplateProcessorMailer extends WireData implements Module {
 
 		//
 		$this->set('submitText', 'Send');
+
+		// path to PHPMailer - only here to enable custom PHPMailer install
+		$this->set('PHPMailerPath', 'PHPMailer/');
 		
 		// use mail() or PHPMailer:: <- recommended
-		$this->set('usePHPMailer', true);
+		$this->set('usePHPMailer', false);
 		
 		// use mail() or configurable SMTP server
 		$this->set('isSMTP', false);
@@ -195,7 +197,6 @@ class FormTemplateProcessorMailer extends WireData implements Module {
 		$subject = '';
 		
 		foreach($this->contact->fields as $field) {
-
 			if (in_array($field->name, $this->skipFields)) continue; 
 			
 			$label = $field->label;
@@ -210,7 +211,7 @@ class FormTemplateProcessorMailer extends WireData implements Module {
 			elseif ($field->name == $this->subjectName) 
 				$subject = $value;
 		}
-		
+			
 		$mailInfo = (object) array(
 			'toName' => $this->toName,
 			'toAddress' => $this->toAddress,
@@ -247,7 +248,7 @@ class FormTemplateProcessorMailer extends WireData implements Module {
 	
 	protected function ___mail($mailInfo) {
 		
-		$headers = $mailInfo->fromAddress ? 'From: '.$mailInfo->fromName.'<'.$mailInfo->fromAddress.'>'.PHPEOL : '';
+		$headers = $mailInfo->fromAddress ? 'From: "'.$mailInfo->fromName.'" <'.$mailInfo->fromAddress.'>'.PHP_EOL : '';
 		$headers .= sprintf('Content-Type: %s;', $this->bodyIsHTML ? 'text/html' : 'text/plain');
 
 	    // send the email
@@ -255,7 +256,12 @@ class FormTemplateProcessorMailer extends WireData implements Module {
 	}
 	
 	protected function ___PHPMail($mailInfo) {
-		$mailer = $this->modules->get('EmailPHPMailer'); 
+		if (! class_exists(PHPMailer)) {
+			include $this->PHPMailerPath . 'class.phpmailer.php';
+		}
+		if (! class_exists(PHPMailer)) throw new WireException("I don't have 'PHPMailer'. Please check your module install, config, usage.");
+		
+		$mailer = new PHPMailer();
 
 		$mailer->CharSet = 'UTF-8';
 		$mailer->ContentType = $this->bodyIsHTML ? 'text/html' : 'text/plain';
@@ -409,7 +415,7 @@ class FormTemplateProcessorMailer extends WireData implements Module {
 				}
 			}
 
-			if ($this->parent) {
+			if ($this->contact->parent) {
 				$this->savePage($form);
 				$msg .= $this->pageSaved;
 			}
