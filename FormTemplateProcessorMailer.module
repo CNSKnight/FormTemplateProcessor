@@ -191,7 +191,7 @@ class FormTemplateProcessorMailer extends WireData implements Module {
 	*/
 	protected function ___sendEmail($form) {
 
-		$inputsAry = '';
+		$inputsAry = array();
 		$fromName = '';
 		$fromAddress = '';
 		$subject = '';
